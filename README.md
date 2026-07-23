@@ -1,9 +1,9 @@
 # OctoPrint Light Control
-This OctoPrint plugin controls printer lights to reduce power use when the printer is not in use.
+This OctoPrint plugin provides remote control of printer lights.
 
 Lights can be automatically switched on when user specified commands are sent to the printer and/or switched off when idle.
 
-Supports Commands (G-Code or System) or GPIO to switch power supply on/off.
+Supports Plugins, Commands (G-Code or System), or GPIO pins to switch lights on/off.
 
 ![LightControl](lightcontrol_navbar_settings.png?raw=true)
  

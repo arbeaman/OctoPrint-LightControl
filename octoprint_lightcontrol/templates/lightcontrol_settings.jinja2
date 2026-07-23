@@ -25,7 +25,7 @@
 
     <h4>Switching</h4>
     <div class="control-group">
-        <label class="control-label">Switching Method</label>
+        <label class="control-label">Switching Method - How OctoPrint Turns It On and Off</label>
         <div class="controls">
             <select data-bind="value: settings.plugins.lightcontrol.switchingMethod">
                 <option value="GCODE">G-Code Command</option>
@@ -89,7 +89,7 @@
     <div class="control-group">
         <div class="controls">
             <label class="checkbox">
-            <input type="checkbox" data-bind="checked: settings.plugins.lightcontrol.enablePseudoOnOff"> Enable switching with G-Code commands.
+            <input type="checkbox" data-bind="checked: settings.plugins.lightcontrol.enablePseudoOnOff"> Turn on/off when a G-Code command is executed.
             </label>
         </div>
     </div>
@@ -119,10 +119,10 @@
 
     <h4>Sensing</h4>
     <div class="control-group">
-        <label class="control-label">Sensing Method</label>
+        <label class="control-label">Sensing Method - How OctoPrint Tells If It Is On Or Off</label>
         <div class="controls">
             <select data-bind="value: settings.plugins.lightcontrol.sensingMethod">
-                <option value="INTERNAL">Internal</option>
+                <option value="INTERNAL">Internal (Use the last set state)</option>
                 <option value="SYSTEM">System Command</option>
                 <option value="GPIO"{% if not plugin_lightcontrol_hasGPIO %} disabled{% endif %}>GPIO</option>
                 <option value="PLUGIN">Plugin</option>
@@ -185,7 +185,7 @@
     <div class="control-group">
         <div class="controls">
             <label class="checkbox">
-            <input type="checkbox" data-bind="checked: settings.plugins.lightcontrol.autoOn"> Automatically turn Light ON
+            <input type="checkbox" data-bind="checked: settings.plugins.lightcontrol.autoOn"> Automatically turn Light ON when a G-Code is executed
             </label>
         </div>
     </div>
