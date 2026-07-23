@@ -5,8 +5,11 @@ Lights can be automatically switched on when user specified commands are sent to
 
 Supports Plugins, Commands (G-Code or System), or GPIO pins to switch lights on/off.
 
-![LightControl](lightcontrol_navbar_settings.png?raw=true)
- 
+ The lightbulb icon in the nav bar can be clicked to turnt he light on or off:
+![LightControl](lightcontrol_navbar.png?raw=true)
+
+The following is the settings screen:
+![LightControl](lightcontrol_settings.png?raw=true)
  
 ## Setup
 Install the plugin using Plugin Manager from Settings
