@@ -27,8 +27,5 @@ See the [Wiki](https://github.com/arbeaman/OctoPrint-LightControl/wiki/Troublesh
 ## API
 See the [Wiki](https://github.com/arbeaman/OctoPrint-LightControl/wiki/API)
 
-## Support
-Help can be found at the [OctoPrint Community Forums](https://community.octoprint.org)
-
 ## Credits
 Based on [OctoPrint-PSUControl](https://github.com/kantlivelong/OctoPrint-PSUControl) by Shawn Bruce (kantlivelong), used under the AGPLv3.
