@@ -1,0 +1,15 @@
+#!/bin/sh
+# Bump the patch (last) version digit in pyproject.toml, only when the commit
+# changes code. Runs on both Windows (Git Bash) and the Pi (shared .git).
+f="pyproject.toml"
+[ -f "$f" ] || exit 0
+
+# Skip README/LICENSE/config-only commits — bump only when source changes
+git diff --cached --name-only | grep -Eiq '\.(py|js|css|jinja2|html)$' || exit 0
+
+cur=$(sed -n 's/^version = "\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$f" | head -n1)
+[ -n "$cur" ] || exit 0
+new="${cur%.*}.$(( ${cur##*.} + 1 ))"
+sed -i "s/^version = \"$cur\"/version = \"$new\"/" "$f"
+git add "$f"
+echo "pre-commit: source changed -> version $cur -> $new"
