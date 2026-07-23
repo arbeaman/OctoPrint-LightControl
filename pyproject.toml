@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "OctoPrint-LightControl"
-version = "2.0.0"
+version = "2.0.1"
 description = "Control 3D printer lights."
 authors = [
     {name = "Alerick Beaman", email = "35195829+arbeaman@users.noreply.github.com"}

@@ -1,3 +1,4 @@
+* text=auto eol=lf
 .githooks/pre-commit text eol=lf
 .githooks/ export-ignore
 .gitattributes export-ignore

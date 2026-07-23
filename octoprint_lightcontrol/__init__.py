@@ -1,6 +1,9 @@
 __author__ = "Alerick Beaman <35195829+arbeaman@users.noreply.github.com>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2026 Alerick Beaman - Released under terms of the AGPLv3 License"
+# OctoPrint plugin that switches the 3D printer lights on and off. The lights can be toggled
+# from the nav bar or driven automatically by G-code triggers and printer idle state, using
+# G-code, a system command, a GPIO pin, or a registered sub-plugin for switching and sensing.
 
 import glob
 import platform
@@ -40,8 +43,10 @@ class LightControl(octoprint.plugin.StartupPlugin,
                  octoprint.plugin.SimpleApiPlugin,
                  octoprint.plugin.EventHandlerPlugin,
                  octoprint.plugin.WizardPlugin):
+    """OctoPrint plugin providing manual and automatic control of the 3D printer lights."""
 
     def __init__(self):
+        """Initialize plugin state and detect the available GPIO character devices."""
         self._sub_plugins = dict()
         self._availableGPIODevices = self.get_gpio_devs()
 
@@ -60,6 +65,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_settings_defaults(self):
+        """Define the plugin's configuration keys and their default values."""
         return dict(
             GPIODevice = '',
             switchingMethod = 'GCODE',
@@ -96,6 +102,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def on_settings_initialized(self):
+        """Ensure the post-on/pre-off G-code scripts exist and load settings into memory."""
         scripts = self._settings.listScripts("gcode")
 
         if not "lightcontrol_post_on" in scripts:
@@ -108,6 +115,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def reload_settings(self):
+        """Copy stored settings into the in-memory config, disabling options that are unavailable or incompatible."""
         for k, v in self.get_settings_defaults().items():
             if isinstance(v, str):
                 v = self._settings.get([k])
@@ -138,6 +146,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def on_after_startup(self):
+        """Configure GPIO if selected, start the state-polling thread, and arm the idle timer."""
         if self.config['switchingMethod'] == 'GPIO' or self.config['sensingMethod'] == 'GPIO':
             self.configure_gpio()
 
@@ -149,10 +158,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_gpio_devs(self):
+        """Return the available GPIO character devices (/dev/gpiochip*)."""
         return sorted(glob.glob('/dev/gpiochip*'))
 
 
     def cleanup_gpio(self):
+        """Release any GPIO lines currently held by the plugin."""
         for k, pin in self._configuredGPIOPins.items():
             self._logger.debug("Cleaning up {} pin {}".format(k, pin.name))
             try:
@@ -165,6 +176,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def configure_gpio(self):
+        """Open the GPIO lines used for switching and/or sensing."""
         self._logger.info("Periphery version: {}".format(periphery.version))
 
         if self.config['switchingMethod'] == 'GPIO':
@@ -212,12 +224,14 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _get_plugin_key(self, implementation):
+        """Return the plugin identifier for a registered sub-plugin implementation."""
         for k, v in self._plugin_manager.plugin_implementations.items():
             if v == implementation:
                 return k
 
 
     def register_plugin(self, implementation):
+        """Record a sub-plugin implementation so it can be used for switching or sensing."""
         k = self._get_plugin_key(implementation)
 
         self._logger.debug("Registering plugin - {}".format(k))
@@ -228,10 +242,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def check_light_state(self):
+        """Wake the polling thread to refresh the state immediately."""
         self._check_light_state_event.set()
 
 
     def _check_light_state(self):
+        """Continuously poll the configured sensing method, publish state changes, and notify clients."""
         while True:
             old_isLightOn = self.isLightOn
 
@@ -259,6 +275,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
                 r = p.returncode
                 self._logger.debug("Sensing system command returned: {}".format(r))
 
+                # Sensing system command: exit code 0 means on, 1 means off.
                 if r == 0:
                     new_isLightOn = True
                 elif r == 1:
@@ -312,6 +329,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _start_idle_timer(self):
+        """Start the idle power-off countdown when idle power-off is enabled and the output is on."""
         self._stop_idle_timer()
 
         if self.config['powerOffWhenIdle'] and self.isLightOn:
@@ -320,12 +338,14 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _stop_idle_timer(self):
+        """Cancel the idle power-off countdown."""
         if self._idleTimer:
             self._idleTimer.cancel()
             self._idleTimer = None
 
 
     def _reset_idle_timer(self):
+        """Restart the idle power-off countdown from the beginning."""
         try:
             if self._idleTimer.is_alive():
                 self._idleTimer.reset()
@@ -336,6 +356,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _idle_poweroff(self):
+        """Switch off once the printer has been idle, unless it is printing or paused."""
         if not self.config['powerOffWhenIdle']:
             return
 
@@ -345,7 +366,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
         if self._printer.is_printing() or self._printer.is_paused():
             return
 
-        self._logger.info("Idle timeout reached after {} minute(s). Turning heaters off prior to shutting off Light.".format(self.config['idleTimeout']))
+        self._logger.info("Idle timeout reached after {} minute(s). Waiting for tool temperatures before shutting off Light.".format(self.config['idleTimeout']))
         if self._wait_for_heaters():
             self._logger.info("Heaters below temperature.")
             self.turn_light_off()
@@ -354,28 +375,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _wait_for_heaters(self):
+        """Wait until tool (hotend) temperatures fall below the configured threshold before switching off.
+
+        Only the light is switched off by the idle routine; the printer's own heaters are left
+        untouched. The wait considers tool (hotend) temperatures only -- the bed is ignored.
+        """
         self._waitForHeaters = True
-        heaters = self._printer.get_current_temperatures()
-
-        for heater, entry in heaters.items():
-            target = entry.get("target")
-            if target is None:
-                # heater doesn't exist in fw
-                continue
-
-            try:
-                temp = float(target)
-            except ValueError:
-                # not a float for some reason, skip it
-                continue
-
-            if temp != 0:
-                self._logger.info("Turning off heater: {}".format(heater))
-                self._skipIdleTimer = True
-                self._printer.set_temperature(heater, 0)
-                self._skipIdleTimer = False
-            else:
-                self._logger.debug("Heater {} already off.".format(heater))
 
         while True:
             if not self._waitForHeaters:
@@ -416,6 +421,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
+        """Handle pseudo on/off commands, auto-on triggers, and idle-timer resets for outgoing G-code."""
         skipQueuing = False
 
         if not gcode:
@@ -445,6 +451,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def turn_light_on(self):
+        """Switch on using the configured method and run the post-on script."""
         if self.config['switchingMethod'] in ['GCODE', 'GPIO', 'SYSTEM', 'PLUGIN']:
             self._logger.info("Switching Light On")
             if self.config['switchingMethod'] == 'GCODE':
@@ -499,6 +506,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
             self.check_light_state()
 
+            # Optionally reconnect to the printer when the lights are switched on.
             if self.config['connectOnPowerOn'] and self._printer.is_closed_or_error():
                 self._printer.connect()
                 time.sleep(0.1)
@@ -508,6 +516,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def turn_light_off(self):
+        """Run the pre-off script and switch off using the configured method."""
         if self.config['switchingMethod'] in ['GCODE', 'GPIO', 'SYSTEM', 'PLUGIN']:
             if not self._printer.is_closed_or_error():
                 self._printer.script("lightcontrol_pre_off", must_be_set=False)
@@ -558,6 +567,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
                         )
                         return
 
+            # Optionally disconnect from the printer when the lights are switched off.
             if self.config['disconnectOnPowerOff']:
                 self._printer.disconnect()
 
@@ -569,10 +579,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_light_state(self):
+        """Return the current on/off state."""
         return self.isLightOn
 
 
     def turn_on_before_printing_after_upload(self):
+        """Turn the lights on when a file is uploaded and selected to print immediately via the API."""
         if ( self.config['turnOnWhenApiUploadPrint'] and
              not self.isLightOn and
              flask.request.path.startswith('/api/files/') and
@@ -582,6 +594,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def on_event(self, event, payload):
+        """Push state to newly connected clients and switch off on firmware/communication errors."""
         if event == Events.CLIENT_OPENED:
             self._plugin_manager.send_plugin_message(self._identifier, dict(isLightOn=self.isLightOn))
             return
@@ -598,6 +611,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_api_commands(self):
+        """Declare the simple-API commands the plugin accepts."""
         return dict(
             turnLightOn=[],
             turnLightOff=[],
@@ -607,10 +621,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def on_api_get(self, request):
+        """Return the current state in response to a simple-API GET."""
         return self.on_api_command("getLightState", [])
 
 
     def on_api_command(self, command, data):
+        """Enforce permissions and carry out the on/off/toggle/status API commands."""
         if command in ['turnLightOn', 'turnLightOff', 'toggleLight']:
             if not Permissions.PLUGIN_LIGHTCONTROL_CONTROL.can():
                 return make_response("Insufficient rights", 403)
@@ -632,6 +648,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def on_settings_save(self, data):
+        """Persist the G-code scripts and settings, then reconfigure GPIO and the idle timer."""
         if 'scripts_gcode_lightcontrol_post_on' in data:
             script = data["scripts_gcode_lightcontrol_post_on"]
             self._settings.saveScript("gcode", "lightcontrol_post_on", u'' + script.replace("\r\n", "\n").replace("\r", "\n"))
@@ -641,8 +658,6 @@ class LightControl(octoprint.plugin.StartupPlugin,
             script = data["scripts_gcode_lightcontrol_pre_off"]
             self._settings.saveScript("gcode", "lightcontrol_pre_off", u'' + script.replace("\r\n", "\n").replace("\r", "\n"))
             data.pop('scripts_gcode_lightcontrol_pre_off')
-
-        old_config = self.config.copy()
 
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
@@ -659,18 +674,22 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_wizard_version(self):
+        """Return the setup-wizard version."""
         return 1
 
 
     def is_wizard_required(self):
+        """Report whether the first-run setup wizard should be shown."""
         return True
 
 
     def get_settings_version(self):
+        """Return the settings schema version."""
         return 4
 
 
     def on_settings_migrate(self, target, current=None):
+        """Upgrade stored settings from older schema versions to the current one."""
         if current is None:
             current = 0
 
@@ -783,6 +802,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_template_vars(self):
+        """Expose GPIO devices, registered sub-plugins, and capability flags to the templates."""
         available_plugins = []
         for k in list(self._sub_plugins.keys()):
             available_plugins.append(dict(pluginIdentifier=k, displayName=self._plugin_manager.plugins[k].name))
@@ -796,16 +816,19 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def is_template_autoescaped(self):
+        """Enable Jinja autoescaping for the plugin's templates."""
         return True
 
 
     def get_template_configs(self):
+        """Declare the settings template with custom Knockout bindings."""
         return [
             dict(type="settings", custom_bindings=True)
         ]
 
 
     def get_assets(self):
+        """Declare the plugin's static JavaScript, LESS, and CSS assets."""
         return {
             "js": ["js/lightcontrol.js"],
             "less": ["less/lightcontrol.less"],
@@ -814,6 +837,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def get_update_information(self):
+        """Provide Software Update plugin metadata for GitHub release checks."""
         return dict(
             lightcontrol=dict(
                 displayName="Light Control",
@@ -832,10 +856,12 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def register_custom_events(self):
+        """Register the state-changed event fired when the output turns on or off."""
         return ["light_state_changed"]
 
 
     def get_additional_permissions(self, *args, **kwargs):
+        """Define the permission that guards switching the output on and off."""
         return [
             dict(key="CONTROL",
                  name="Control",
@@ -847,6 +873,7 @@ class LightControl(octoprint.plugin.StartupPlugin,
 
 
     def _hook_octoprint_server_api_before_request(self, *args, **kwargs):
+        """Register the pre-request check that powers the lights on for print-on-upload requests."""
         return [self.turn_on_before_printing_after_upload]
 
 
@@ -854,6 +881,7 @@ __plugin_name__ = "Light Control"
 __plugin_pythoncompat__ = ">=3,<4"
 
 def __plugin_load__():
+    """Instantiate the plugin and register its hooks and helpers."""
     global __plugin_implementation__
     __plugin_implementation__ = LightControl()
 

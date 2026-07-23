@@ -1,8 +1,11 @@
 __author__ = "Alerick Beaman <35195829+arbeaman@users.noreply.github.com>"
 __license__ = "GNU Affero General Public License http://www.gnu.org/licenses/agpl.html"
 __copyright__ = "Copyright (C) 2026 Alerick Beaman - Released under terms of the AGPLv3 License"
+# Command-line 'on', 'off', 'toggle', and 'status' commands for the printer lights,
+# issued through OctoPrint's REST API.
 
 def commands(cli_group, pass_octoprint_ctx, *args, **kwargs):
+    """Return the CLI commands this plugin adds to the 'octoprint' command group."""
     # Requires OctoPrint >= 1.3.5
     import click
     import sys

@@ -153,6 +153,7 @@
         <label class="control-label">Sensing System Command</label>
         <div class="controls">
             <input type="text" class="input-block-level" data-bind="value: settings.plugins.lightcontrol.senseSystemCommand">
+            <span class="help-inline">Exit code 0 means on; exit code 1 means off.</span>
         </div>
     </div>
     <!-- /ko -->
@@ -259,6 +260,7 @@
                 <input type="number" min="0" class="input-mini text-right" data-bind="value: settings.plugins.lightcontrol.idleTimeoutWaitTemp">
                 <span class="add-on">°C</span>
             </div>
+            <span class="help-inline">Waits until hotend (tool) temperatures fall below this value before the light is switched off. The bed temperature is not considered.</span>
         </div>
     </div>
     <!-- /ko -->
